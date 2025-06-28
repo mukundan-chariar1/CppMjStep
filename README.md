@@ -59,3 +59,12 @@ If you use this package in your research, a citation would be appreciated:
   howpublished = {\url{https://github.com/EladSharony/DiffMjStep}},
 }
 ```
+
+
+# Requirements:
+
+https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.4.0%2Bcpu.zip
+
+download, unzip in a place you know.
+
+use MjModel._address for getting pointer
