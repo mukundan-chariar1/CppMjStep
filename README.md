@@ -99,4 +99,5 @@ If you use this package in your research, a citation would be appreciated:
 
 ---
 
-Special thanks to Elad Sharony, who's [DiffMjStep](https://github.com/EladSharony/DiffMjStep) inspired this module.
+Special thanks to Elad Sharony, whose DiffMjStep inspired this module.
+Portions of this code are derived from DiffMjStep (link to original repo), which is MIT licensed.
