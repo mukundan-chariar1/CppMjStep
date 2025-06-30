@@ -1,7 +1,7 @@
-@software{DiffMjStep2024,
-  author = {Sharony, Elad},
-  title = {{DiffMjStep: Custom Autograd Extension for Differentiable MuJoCo Dynamics}},
-  year = {2024},
+@software{CppMjStep2025,
+  author = {Chariar, Mukundan},
+  title = {{CppMjStep: Extended Custom Autograd Extension for Differentiable MuJoCo Dynamics}},
+  year = {2025},
   version = {1.0},
-  howpublished = {\url{https://github.com/EladSharony/DiffMjStep}},
+  howpublished = {\url{https://github.com/mukundan-chariar1/CppMjStep}},
 }

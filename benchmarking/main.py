@@ -1,26 +1,13 @@
-from torch.utils.cpp_extension import load
-
-mjmod = load(
-    name='mjmod',
-    sources=['src/mjstep_module.cpp',
-             'src/utils.cpp'],
-    extra_include_paths=['/home/mukundan/opt/mujoco/mujoco-3.3.1/include'],
-    extra_ldflags=[
-        '-L/home/mukundan/opt/mujoco/mujoco-3.3.1/lib', 
-        '-lmujoco'
-    ],
-    verbose=True,
-)
-
 import torch
 import mujoco as mj
-from python.autograd_mujoco import MjStep
+
+from MjStep import *
+from MjStep.autograd_mujoco import pyMjStep
 
 import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 def jacobian(f: callable, x: torch.Tensor, eps: float = 1e-4) -> torch.Tensor:
     """
@@ -46,8 +33,8 @@ def call_jacobian(state: torch.Tensor, ctrl: torch.Tensor, n_steps: int, mj_mode
     ctrl.requires_grad = False
     n_batch = state.shape[0]
     naive_dydx, naive_dydu = zip(
-        *[(jacobian(lambda s: MjStep.apply(s, ctrl[[i]], n_steps, mj_model, mj_data)[0], state[[i]], 1e-4),
-           jacobian(lambda a: MjStep.apply(state[[i]], a, n_steps, mj_model, mj_data)[0], ctrl[[i]], 1e-4))
+        *[(jacobian(lambda s: pyMjStep.apply(s, ctrl[[i]], n_steps, mj_model, mj_data)[0], state[[i]], 1e-4),
+           jacobian(lambda a: pyMjStep.apply(state[[i]], a, n_steps, mj_model, mj_data)[0], ctrl[[i]], 1e-4))
           for i in range(n_batch)])
     naive_dydx, naive_dydu = torch.stack(naive_dydx), torch.stack(naive_dydu)
     return naive_dydx, naive_dydu
@@ -62,12 +49,14 @@ if __name__ == '__main__':
     mj_model = mj.MjModel.from_xml_path(filename=xml_path)
     mj_data = mj.MjData(mj_model)
 
-    n_steps = 4  # Number of steps to unroll the dynamics
+    n_steps = 5  # Number of steps to unroll the dynamics
+
+    mjstep_nn=MjStep(mj_model, mj_data, n_steps)
 
     torch.manual_seed(0)
 
     # batch_sizes = [2 ** i for i in range(0, 12 + 1)]
-    batch_sizes = [2 ** i for i in range(0, 3 + 1)]
+    batch_sizes = [i for i in range(1, 20 + 1)]
 
     devices = [torch.device('cpu'), torch.device('cuda')]
 
@@ -82,13 +71,21 @@ if __name__ == '__main__':
                 state = torch.rand(n_batch, mj_model.nv + mj_model.nv + mj_model.na + mj_model.nsensordata, device=device, requires_grad=True, dtype=torch.float64)
                 ctrl = torch.rand(n_batch, mj_model.nu, device=device, requires_grad=True, dtype=torch.float64)
 
-                # Measure the execution time of MjStep.apply
+                # Measure the execution time of pyMjStep.apply
                 start_time = time.time()
-                # next_state, dydx, dydu = MjStep.apply(state, ctrl, n_steps, mj_model, mj_data)
-                next_state, dydx, dydu = mjmod.MjStep.apply(state, ctrl, n_steps, mj_model._address, mj_data._address)
+                next_state = pyMjStep.apply(state, ctrl, n_steps, mj_model, mj_data)
 
                 end_time = time.time()
-                new_row = pd.DataFrame({'run': [run], 'device': [device], 'method': ['MjStep'], 'batch_size': [n_batch],
+                new_row = pd.DataFrame({'run': [run], 'device': [device], 'method': ['pyMjStep'], 'batch_size': [n_batch],
+                                        'execution_time': [end_time - start_time]})
+                df = pd.concat([df, new_row], ignore_index=True)
+
+                # Measure the execution time of MjStep
+                start_time = time.time()
+                next_state = mjstep_nn(state, ctrl)
+
+                end_time = time.time()
+                new_row = pd.DataFrame({'run': [run], 'device': [device], 'method': ['CppMjStep'], 'batch_size': [n_batch],
                                         'execution_time': [end_time - start_time]})
                 df = pd.concat([df, new_row], ignore_index=True)
 
@@ -118,5 +115,28 @@ if __name__ == '__main__':
     ax.grid(True)
 
     # Save the plot to svg
-    plt.savefig('execution_time_new_cpp.svg', format='svg')
-    plt.savefig('execution_time_new_cpp.png', format='png')
+    plt.savefig('execution_time_sensors_all.svg', format='svg')
+    plt.savefig('execution_time.png', format='png')
+
+    plt.close() 
+
+    df = df[df['method'] != 'Naive FD']
+
+    sns.set_style('whitegrid')
+    sns.set_context('paper', font_scale=1.2)
+    sns.set_palette('deep')
+
+    ax = sns.lineplot(data=df, x='batch_size', y='execution_time', hue='method', style='device', errorbar='sd')
+
+    sns.move_legend(ax, "upper center", ncol=2)
+    ax.set_xticks(batch_sizes, [f'{batch_size}' for batch_size in batch_sizes])
+    ax.set_xlim([batch_sizes[0], batch_sizes[-1]])
+    ax.set_xscale('log', base=2)
+    ax.set_title(f'Execution Time of MjStep and PyMjStep (Over {n_runs} Runs)')
+    ax.set_xlabel('Batch Size')
+    ax.set_ylabel('Execution Time (s)')
+    ax.grid(True)
+
+    # Save the plot to svg
+    plt.savefig('execution_time_py_vs_cpp_sensors.svg', format='svg')
+    plt.savefig('execution_time.png', format='png')

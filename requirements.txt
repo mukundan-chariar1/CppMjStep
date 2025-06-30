@@ -1,0 +1,6 @@
+mujoco
+torch==2.4
+numpy
+pandas
+matplotlib
+seaborn

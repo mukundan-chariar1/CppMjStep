@@ -6,7 +6,9 @@ from torch.autograd.function import once_differentiable
 import mujoco as mj
 from mujoco import rollout
 
-from python.utils import *
+from MjStep.utils import *
+
+import time
 
 r"""
     Cloned from : https://github.com/EladSharony/DiffMjStep
@@ -21,8 +23,7 @@ r"""
         }  
 """
 
-
-class MjStep(Function):
+class pyMjStep(Function):
     """
     A custom autograd function for the MuJoCo step function.
     This is required because the MuJoCo step function is not differentiable.
@@ -31,7 +32,7 @@ class MjStep(Function):
     @staticmethod
     def forward(*args, **kwargs) -> tuple[torch.Tensor, np.ndarray, np.ndarray]:
         """
-        Forward pass of the MjStep function.
+        Forward pass of the pyMjStep function.
 
         Args:
             *args: Variable length argument list.
@@ -62,7 +63,12 @@ class MjStep(Function):
         state, ctrl, n_steps, mj_model, mj_data = args
         dydx, dydu = [], []
         device = state.device
+        dtype=state.dtype
         compute_grads = state.requires_grad or ctrl.requires_grad
+
+        batch_dim=state.shape[0]
+        total_dim=2*mj_model.nv+mj_model.na*2+mj_model.nsensordata
+        nU=mj_model.nu
 
         state, ctrl = state.numpy(force=True), ctrl.numpy(force=True)
         sensor_flag=has_sensors(mj_model)
@@ -101,10 +107,6 @@ class MjStep(Function):
             _states = np.concatenate([state[:, None, :], states[:, :-1, :]], axis=1)
             _sensordatas =  np.concatenate([sensordata[:, None, :], sensordatas[:, :-1, :]], axis=1)
 
-            import pdb; pdb.set_trace()
-
-
-
             # Set the solver tolerances and disable the warmstart for the solver
             mj_model.opt.tolerance = 0  # Disable early termination to make the same number of steps for each FD call
             mj_model.opt.ls_tolerance = 1e-18  # Set the line search tolerance to a very low value, for stability
@@ -117,7 +119,7 @@ class MjStep(Function):
                 for (_state, _ctrl, _sensordata) in zip(state_batch, ctrl_batch, sensordata_batch):
                     # Reset the MuJoCo data and set the state and control
                     mj.mj_resetData(mj_model, mj_data)
-                    MjStep.set_state_and_ctrl(mj_model, mj_data, _state, _ctrl, _sensordata)
+                    pyMjStep.set_state_and_ctrl(mj_model, mj_data, _state, _ctrl, _sensordata)
 
                     # Initialize the _A and _B matrices for the approximated linear system
                     _A = np.zeros((2 * mj_model.nv + mj_model.na, 2 * mj_model.nv + mj_model.na))
@@ -127,6 +129,7 @@ class MjStep(Function):
                     _D = np.zeros((mj_model.nsensordata + mj_model.na, mj_model.nu))
 
                     # Compute the forward dynamics using MuJoCo's built-in function
+                    # Most of the time is spent here, if this becomes faster, the function also becomes faster
                     mj.mjd_transitionFD(mj_model, mj_data, 1e-8, 1, _A, _B, _C, _D)
 
                     # Update the A and B matrices
@@ -137,8 +140,6 @@ class MjStep(Function):
                     D = np.matmul(_C, B) + _D
 
                 # Append the A and B matrices to the lists
-                total_dim = A.shape[0] + C.shape[0]
-
                 dydx_block = np.zeros((total_dim, total_dim))
                 dydx_block[:A.shape[0], :A.shape[0]] = A
                 dydx_block[A.shape[0]:, :A.shape[0]] = C
@@ -157,8 +158,8 @@ class MjStep(Function):
         next_state = torch.as_tensor(next_state, device=device, dtype=torch.float32)
 
         # Convert the lists of A and B matrices to numpy arrays
-        dydx = torch.from_numpy(np.array(dydx)).to(device).float() if compute_grads else None
-        dydu = torch.from_numpy(np.array(dydu)).to(device).float() if compute_grads else None
+        dydx = torch.from_numpy(np.array(dydx)).to(device, dtype=dtype) if compute_grads else torch.zeros((batch_dim, total_dim, total_dim)).to(device, dtype=dtype)
+        dydu = torch.from_numpy(np.array(dydu)).to(device, dtype=dtype) if compute_grads else torch.zeros((batch_dim, total_dim, nU)).to(device, dtype=dtype)
 
         return next_state, dydx, dydu
 
@@ -169,9 +170,6 @@ class MjStep(Function):
         """
         state, _, _, _, _ = inputs
         _, dydx, dydu = output
-
-        # dydx = torch.from_numpy(dydx).float().to(state.device) if dydx is not None else None
-        # dydu = torch.from_numpy(dydu).float().to(state.device) if dydu is not None else None
 
         ctx.save_for_backward(dydx, dydu)
 

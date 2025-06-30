@@ -1,15 +1,19 @@
 
-# DiffMjStep: Custom Autograd Function for Differentiable MuJoCo Dynamics
+# CppMjStep: Extended Custom Autograd Function for Differentiable MuJoCo Dynamics
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Description
 
-An efficient integration between PyTorch and MuJoCo. 
+An efficient integration between PyTorch and MuJoCo, implemented in C++. 
 Enables automatic differentiation through MuJoCo simulation trajectories, 
-allowing for gradient-based optimization of control policies directly within PyTorch. 
+allowing for gradient-based optimization of control policies directly within PyTorch. This implementation extends to sensors in the model, and uses C++ to improve on speed (although marginal).
 
-## Features
+---
+
+## Features 
+
+**<img src="https://pypi.org/static/images/logo-small.8998e9d1.svg" width="32" height="32"> pip Installable**: Simple installation through pip. Refer [INSTALL.md](./INSTALL.md).
 
 **<img src="https://cdn-icons-png.flaticon.com/128/4285/4285622.png" width="32" height="32"> Efficient Gradient Computations**: Significantly more efficient than naive Jacobian finite differencing calculations as it utilizes the built-in finite difference method in MuJoCo [mjd_transitionFD](https://mujoco.readthedocs.io/en/stable/APIreference/APIfunctions.html#mjd-transitionfd).
 
@@ -17,54 +21,82 @@ allowing for gradient-based optimization of control policies directly within PyT
 
 **<img src="https://cdn-icons-png.flaticon.com/512/12979/12979130.png" width="32" height="32"> Batch Simulation Support**: Enables batched simulations and gradient computations, significantly improving computational efficiency for large-scale experiments.
 
+**<img src="https://cdn-icons-png.flaticon.com/128/3222/3222629.png" width="32" height="32"> Sensor Support**: Enables addition of sensors to the model, and allows backprop of sensor data through simulation with next to no cost to computation.
 
-## Execution Benchmark
+---
+## Comparison of execution times
+
+### Execution time for models with no sensors
 <div style="text-align: center;">
-    <img src="execution_time.svg" alt="Benchmark Results">
+    <img src="benchmarking/execution_time_no_sensors_all.svg" alt="Benchmark Results no sensors">
 </div>
+
+### Execution time for models with no sensors (Python v/s C++)
+<div style="text-align: center;">
+    <img src="benchmarking/execution_time_py_vs_cpp_no_sensors.svg" alt="Benchmark Results py vs cpp no sensors">
+</div>
+
+### Execution time for models with sensors
+<div style="text-align: center;">
+    <img src="benchmarking/execution_time_sensors_all.svg" alt="Benchmark Results sensors">
+</div>
+
+### Execution time for models with no sensors (Python v/s C++)
+<div style="text-align: center;">
+    <img src="benchmarking/execution_time_py_vs_cpp_sensors.svg" alt="Benchmark Results py vs cpp sensors">
+</div>
+
+---
 
 ## Usage
 
 ```python
 import torch
 import mujoco as mj
-from DiffMjStep import MjStep
+from CppMjStep import MjStep, PyMjStep
 
 # Initialize MuJoCo model and data
 xml_path = 'path/to/your/model.xml'
 mj_model = mj.MjModel.from_xml_path(filename=xml_path)
 mj_data = mj.MjData(mj_model)
 
+# Define MjStep layer
+torch_wrapped_model = MjStep(mj_model, mj_data, n_steps=5)
+
 # Define initial state and control input tensors
-state = torch.rand(mj_model.nq + mj_model.nv + mj_model.na, requires_grad=True)
+state = torch.rand(mj_model.nq + 
+                    mj_model.nv + 
+                    mj_model.na + 
+                    mj_model.nsensordata, 
+                    requires_grad=True)
 ctrl = torch.rand(mj_model.nu, requires_grad=True)
 
-# Compute next state and gradients
-next_state, dydx, dydu = MjStep.apply(state, ctrl, n_steps=4, mj_model, mj_model, mj_data)
+# Compute next state
+next_state = MjStep(state, ctrl)
 ```
+
+---
 
 ## Notes
 - As of [MuJoCo 3.1.2](https://mujoco.readthedocs.io/en/3.1.2/changelog.html#python-bindings) the initial state passed to `rollout()` must include a time-step, such that `nstate = mj_stateSize(model, mjtState.mjSTATE_FULLPHYSICS)`. 
+- Gradients are implicitly computed, to expose them refer [MjStep/nn_wrapper.py](MjStep/nn_wrapper.py)
+
+---
 
 ## Citation
 
 If you use this package in your research, a citation would be appreciated:
 
 ```
- @software{DiffMjStep2024,
-  author = {Sharony, Elad},
-  title = {{DiffMjStep: Custom Autograd Function for Differentiable MuJoCo Dynamics}},
-  year = {2024},
+@software{CppMjStep2025,
+  author = {Chariar, Mukundan},
+  title = {{CppMjStep: Extended Custom Autograd Extension for Differentiable MuJoCo Dynamics}},
+  year = {2025},
   version = {1.0},
-  howpublished = {\url{https://github.com/EladSharony/DiffMjStep}},
+  howpublished = {\url{https://github.com/mukundan-chariar1/CppMjStep}},
 }
 ```
 
+---
 
-# Requirements:
-
-https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.4.0%2Bcpu.zip
-
-download, unzip in a place you know.
-
-use MjModel._address for getting pointer
+Special thanks to Elad Sharony, who's [DiffMjStep](https://github.com/EladSharony/DiffMjStep) inspired this module.
