@@ -34,6 +34,7 @@ cd CppMjStep
 conda create -n MjStep_env python=3.10
 conda activate MjStep_env
 pip install -r requirements.txt
+conda install -c conda-forge libstdcxx-ng
 ```
 
 ## 5. Install the Package
