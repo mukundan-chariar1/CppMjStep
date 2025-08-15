@@ -1,0 +1,4 @@
+[submodule "mujoco"]
+	path = mujoco
+	url = git@github.com:mukundan-chariar1/mujoco.git
+	branch = parallel-fd
