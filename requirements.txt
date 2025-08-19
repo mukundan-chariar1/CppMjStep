@@ -1,4 +1,4 @@
-mujoco
+mujoco>=3.3.5
 torch==2.4
 numpy
 pandas

@@ -4,7 +4,7 @@
 
 * **Python 3.8+**
 * **PyTorch** (tested with >= 1.13)
-* **MuJoCo** 3.x (compiled and installed, see [MuJoCo install guide](https://mujoco.readthedocs.io/en/stable/))
+* **MuJoCo** >=3.3.5 (compiled and installed, see [MuJoCo install guide](https://mujoco.readthedocs.io/en/stable/))
 * **setuptools**
 * **C++17 compiler** (e.g. g++ >= 7)
 * (Recommended) **virtual environment** (conda or venv)
