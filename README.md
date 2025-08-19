@@ -61,7 +61,7 @@ mj_model = mj.MjModel.from_xml_path(filename=xml_path)
 mj_data = mj.MjData(mj_model)
 
 # Define MjStep layer
-torch_wrapped_model = MjStep(mj_model, mj_data, n_steps=5)
+torch_wrapped_model = MjStep(mj_model, mj_data, n_steps=5, multithread=False)
 
 # Define initial state and control input tensors
 state = torch.rand(mj_model.nq + 
