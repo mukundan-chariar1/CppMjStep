@@ -130,8 +130,16 @@ torch::Tensor qpos_to_axis_angle(const torch::Tensor& qpos, double eps) {
  */
 
 void set_state_from_tensor(mjModel* m, mjData* d, const torch::Tensor& state_row) {
+    // TORCH_CHECK(state_row.numel() == m->nq+m->nv+m->na, 
+    //             "state_row must have nq+nv+na elements");
+    const auto expected = m->nq + m->nv + m->na;
     TORCH_CHECK(state_row.numel() == m->nq+m->nv+m->na, 
-                "state_row must have nq+nv+na elements");
+                "state_row must have nq+nv+na elements. Got ",
+                state_row.numel(), " vs expected ", expected,
+                " (sizes=", state_row.sizes(),
+                ", device=", state_row.device(),
+                ", dtype=", state_row.dtype(), ").");
+
     int off = 0;
     auto state_acc = state_row.accessor<double, 1>();
     for (int i = 0; i < m->nq; ++i)   d->qpos[i] = state_acc[off++];
@@ -291,5 +299,5 @@ bool has_free_joint(const mjModel* m) {
  */
 
 bool has_sensors(const mjModel* m) {
-    return m->nsensor > 0;
+    return m->nsensordata > 0;
 }

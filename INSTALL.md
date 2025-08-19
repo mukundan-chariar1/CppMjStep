@@ -9,24 +9,23 @@
 * **C++17 compiler** (e.g. g++ >= 7)
 * (Recommended) **virtual environment** (conda or venv)
 
-## 2. MuJoCo Setup
-
-1. **Download MuJoCo** and extract to a directory (e.g. `~/opt/mujoco/mujoco-3.3.1`).
-
-2. **Set environment variables** *(optional but helpful)*:
-
-   ```bash
-   export MUJOCO_PY_MUJOCO_PATH=~/opt/mujoco/mujoco-3.3.1
-   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/opt/mujoco/mujoco-3.3.1/lib
-   ```
-
-## 3. Clone This Repository
+## 2. Clone This Repository
 
 ```bash
-git clone git@github.com:mukundan-chariar1/CppMjStep.git
+git clone --recurse-submodules git@github.com:mukundan-chariar1/CppMjStep.git
 cd CppMjStep
 ```
 * **Note:** Update your `setup.py` or build scripts with the correct MuJoCo include and lib paths.
+
+## 3. MuJoCo Setup
+
+```
+cd mujoco
+cmake -S . -B build   -DCMAKE_BUILD_TYPE=Release   -DBUILD_SHARED_LIBS=ON   -DCMAKE_INSTALL_PREFIX="$(pwd)/_install"   -DMUJOCO_BUILD_TESTS=OFF   -DMUJOCO_BUILD_EXAMPLES=OFF
+cmake --build build -j
+cmake --install build
+cd ./..
+```
 
 ## 4. (Recommended) Create a Python Environment
 

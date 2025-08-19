@@ -7,7 +7,7 @@
 
 An efficient integration between PyTorch and MuJoCo, implemented in C++. 
 Enables automatic differentiation through MuJoCo simulation trajectories, 
-allowing for gradient-based optimization of control policies directly within PyTorch. This implementation extends to sensors in the model, and uses C++ to improve on speed (although marginal).
+allowing for gradient-based optimization of control policies directly within PyTorch. This implementation extends to sensors in the model, and uses C++ with multithreading to improve on speed (>2x speedup with large batch sizes for large models).
 
 ---
 
@@ -80,6 +80,7 @@ next_state = MjStep(state, ctrl)
 ## Notes
 - As of [MuJoCo 3.1.2](https://mujoco.readthedocs.io/en/3.1.2/changelog.html#python-bindings) the initial state passed to `rollout()` must include a time-step, such that `nstate = mj_stateSize(model, mjtState.mjSTATE_FULLPHYSICS)`. 
 - Gradients are implicitly computed, to expose them refer [MjStep/nn_wrapper.py](MjStep/nn_wrapper.py)
+- Multithreading support has been added for differentiation. It is up to the user to pass the multithread flag at initialization. See [MjStep/nn_wrapper.py](MjStep/nn_wrapper.py) for more.
 
 ---
 
