@@ -42,8 +42,8 @@ def call_jacobian(state: torch.Tensor, ctrl: torch.Tensor, n_steps: int, mj_mode
 
 if __name__ == '__main__':
     # path to the xml file
-    # xml_path = 'assets/half_cheetah.xml'
-    xml_path = 'assets/smpl_with_sensors.xml'
+    # xml_path = 'assets/half_cheetah.xml'; multithread=False
+    xml_path = 'assets/smpl_with_sensors.xml'; multithread=True
 
     # Create an instance of the MjModel and MjData
     mj_model = mj.MjModel.from_xml_path(filename=xml_path)
@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
     n_steps = 5  # Number of steps to unroll the dynamics
 
-    mjstep_nn=MjStep(mj_model, mj_data, n_steps)
+    mjstep_nn=MjStep(mj_model, mj_data, n_steps, multithread)
 
     torch.manual_seed(0)
 

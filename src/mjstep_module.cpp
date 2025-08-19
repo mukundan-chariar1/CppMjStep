@@ -1,3 +1,7 @@
+extern "C" {
+  #include "engine_extension/engine_derivative_parallel.h"
+}
+
 #include <torch/extension.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -24,6 +28,7 @@ struct MjStep : public torch::autograd::Function<MjStep> {
      * @param n_steps       Number of simulation steps to roll forward.
      * @param mj_model_ptr  Opaque pointer (uintptr_t) to MuJoCo mjModel struct.
      * @param mj_data_ptr   Opaque pointer (uintptr_t) to MuJoCo mjData struct.
+     * @param multithread   Flag to use multithreading or not.
      *
      * @return torch::autograd::tensor_list
      *         - next_state: [B, ...] Tensor of next state(s) after simulation.
@@ -42,7 +47,8 @@ struct MjStep : public torch::autograd::Function<MjStep> {
             torch::Tensor ctrl,
             int64_t n_steps,
             uintptr_t mj_model_ptr,
-            uintptr_t mj_data_ptr) 
+            uintptr_t mj_data_ptr,
+            bool multithread) 
     {
         // Unpack pointers to MuJoCo
         mjModel* m = reinterpret_cast<mjModel*>(mj_model_ptr);
@@ -159,9 +165,15 @@ struct MjStep : public torch::autograd::Function<MjStep> {
                     m->opt.disableflags = 1 << 8;     // Disable solver warmstart (2^8 = 256)
 
                     // Most of the time spent is in the next command, if mjd_transitionFD is sped up, the code speeds up as well.
-                    
-                    mjd_transitionFD(m, d, 1e-8, 1, 
+
+                    if (multithread){  
+                        mjd_transitionFD_parallel(m, d, 1e-8, 1, 
                         _A.data_ptr<double>(), _B.data_ptr<double>(), _C.data_ptr<double>(), _D.data_ptr<double>());
+                    }
+                    else{
+                        mjd_transitionFD(m, d, 1e-8, 1, 
+                        _A.data_ptr<double>(), _B.data_ptr<double>(), _C.data_ptr<double>(), _D.data_ptr<double>());
+                    }
 
                     // Update matrices (matmul in torch)
                     A = torch::matmul(_A, A);             // [nA, nA]
@@ -325,10 +337,11 @@ py::object mjstep_apply(torch::Tensor state,
                         torch::Tensor ctrl,
                         int64_t n_steps,
                         uintptr_t mj_model_ptr,
-                        uintptr_t mj_data_ptr)
+                        uintptr_t mj_data_ptr,
+                        bool multithread)
 {
     // Call the static apply method, which returns a tuple of tensors
-    auto result = MjStep::apply(state, ctrl, n_steps, mj_model_ptr, mj_data_ptr);
+    auto result = MjStep::apply(state, ctrl, n_steps, mj_model_ptr, mj_data_ptr, multithread);
     return py::cast(result);  // Converts std::tuple<Tensor, Tensor, Tensor> to Python tuple
 }
 
@@ -347,6 +360,7 @@ py::object mjstep_apply(torch::Tensor state,
  *     n_steps       - Number of simulation steps to roll forward
  *     mj_model_ptr  - Pointer to MuJoCo mjModel (as int/ctypes address)
  *     mj_data_ptr   - Pointer to MuJoCo mjData (as int/ctypes address)
+ *     mulithread    - Flag to use multithreading or not
  *
  * Returns:
  *     next_state    - Output state tensor after simulation
@@ -362,6 +376,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         py::arg("n_steps"),
         py::arg("mj_model_ptr"),
         py::arg("mj_data_ptr"),
+        py::arg("multithread")=false,
         R"pbdoc(
                 Differentiable MuJoCo step.
 
@@ -379,6 +394,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
                     Integer pointer (address) to the MuJoCo mjModel structure.
                 mj_data_ptr : int
                     Integer pointer (address) to the MuJoCo mjData structure.
+                multithread : bool
+                    Flag to use multithreading, default is False. Recommended to use when there is a large number of sensors or teh simulation has many bodies.
 
                 Returns
                 -------
